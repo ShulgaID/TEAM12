@@ -1,76 +1,75 @@
 import numpy as np
-
-class Ball:
-    def __init__(self, x=0.0, y=0.0, mass=1.0, radius=0.2, v_x=0.0, v_y=0.0, omega = 0.0, color = "red"):
-        self.color = color
-        self.radius = radius
-        self.mass = mass
-        self.inertia = 0.4 * self.mass * self.radius**2
-
-        # state
-        self.pos = np.array([x, y])
-        self.v = np.array([v_x, v_y])
-        self.omega = omega
-
-class Plane:
-    def __init__(self, y=0.0, angle=0.0):
-        # y = kx + b
-        self.y = y
-        self.angle = angle
+import math
+from spatial.se import SE3, se3, skew
+from spatial.so import SO3, so3
 
 
-class Link:
-    def __init__(self, mass=1.0, inertia=np.diag([0.1, 0.1, 0.1]), length=1.0, com=[0.5, 0.0, 0.5], joint_type='revolute', z_axis=[1,0,0]):
-        self.mass = mass
-        self.inertia = inertia
-        self.length = length
-        self.com = com
 
-        self.joint_type = joint_type
-        self.z_axis = np.array(z_axis)
+class Robot:
+    def __init__(self):
+        self.xfd = np.zeros(6)
+        self.q = np.zeros(1)
+        self.qd = np.zeros(1)
+        self.model = {}
+        self.positions = []
 
-    def r_i_ci(self):
-        # rc
-        return self.com
-
-    def r_i_minus_1_i(self):
-        # r
-        return np.array([self.length, 0, 0])
-    
-    def r_i_i_plus_1(self):
-        # r2
-        return np.array([self.length, 0, 0])
-
-
-class RobotTwoLink:
-    def __init__(self, links, q_init, qd_init, fd_solver, controller):
-        self.links = links
-        self.n = len(self.links)
-        self.q = np.array(q_init)
-        self.qd = np.array(qd_init)
+    def some_tree(self, nb, bf=1, skew=0, taper=1):
+        model = {}
+        model['gravity'] = np.array([0.0, -9.81, 0.0])    # WARN: hardcoded for now
+        model['NB'] = nb
         
-        self.fd_solver = fd_solver
-        self.controller = controller
+        self.q = np.zeros(nb)
+        self.qd = np.zeros(nb)
+        
+        model['jtype'] = []
+        model['parent'] = np.zeros(nb, dtype=int)
+        model['Xtree'] = []
+        model['I'] = []
+        model['len'] = []
 
-        self.positions = self.forward_kinematics(self.q)
+        
+        for i in range(nb):
+            model['jtype'].append('Rz')
+            model['parent'][i] = int(np.floor((i + 1) - 2 + np.ceil(bf)) / bf)
 
-    def compute_control(self, dt, target_state = None):
-        return self.controller.compute_control(self, dt, target_state)
-
-    def forward_dynamics(self, tau, gravity):
-        return self.fd_solver.forward_dynamics(self, self.q, self.qd, tau, gravity)
-
-    def forward_kinematics(self, q = None):
-        if q is None:
-            q = self.q
-
-        positions = [np.array([0.0, 0.0])]
-        theta = 0
-        for i, link in enumerate(self.links):
-            if link.joint_type == 'revolute':
-                theta += q[i]
-                r = link.length * np.array([np.cos(theta), np.sin(theta)])
+            if model['parent'][i] == 0:
+                model['Xtree'].append(
+                    SE3(SO3().matrix, [0,0,0]).adjoint()
+                )
             else:
-                r = q[i] * link.z_axis[:2]
-            positions.append(positions[-1] + r)
-        return np.array(positions)
+                model['Xtree'].append(
+                    SE3(SO3.rx(skew).T).adjoint() @ SE3(SO3().matrix, [model['parent'][i].size, 0, 0]).adjoint()
+                )
+            
+            len_i = taper ** (i)
+            mass = taper ** (3 * (i))
+            CoM = len_i * np.array([0.5, 0, 0])
+            Icm = mass * len_i**2 * np.diag([0.0025, 1.015/12, 1.015/12])
+
+            model['I'].append(self.mcI(mass, CoM, Icm))
+            model['len'].append(len_i)
+        
+        self.model = model
+
+    def mcI(self, mass, com, Icm):
+        I = np.zeros((6, 6))
+        C = skew(com)
+        I[0:3, 0:3] = Icm + mass * C @ C.T
+        I[0:3, 3:6] = mass * C
+        I[3:6, 0:3] = mass * C.T
+        I[3:6, 3:6] = mass * np.eye(3)
+        return I
+
+if __name__=="__main__":
+    robot = Robot()
+    robot.some_tree(2, 1)
+
+    np.set_printoptions(precision=4)
+    for m in robot.model:
+        print(f"{m}")
+        if type(robot.model[m]) is list:
+            for it in robot.model[m]:
+                print(f"{it}")
+        else:
+            print(f"{robot.model[m]}")
+

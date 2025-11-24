@@ -2,17 +2,21 @@ import numpy as np
 
 class PhysicsEngine:
 
-    def __init__(self, gravity=[0.0, -9.81, 0.0]):
+    def __init__(self, fd_solver, gravity=[0.0, -9.81, 0.0]):
+        self.fd_solver = fd_solver
         self.gravity = np.array(gravity)
 
-    def update(self, robots, plane, dt):
-        for robot in robots:
+    def update(self, objects, dt):
+        if not objects:
+            return
 
-            tau_u = robot.compute_control(dt)
+        for obj in objects:
             
-            qdd = robot.forward_dynamics(tau_u, self.gravity)
+            tau = np.zeros(obj.qd.shape)
+            # tau = -0.1 * obj.qd
+            # tau = 100.0 * (1.57 * np.ones_like(obj.q) - obj.q) - 2.0 * obj.qd
 
-            robot.qd += qdd * dt
-            robot.q += robot.qd * dt
 
-            robot.positions = robot.forward_kinematics()
+            ddq = self.fd_solver.forward_dynamics(obj, obj.q, obj.qd, tau)
+            obj.qd += ddq * dt
+            obj.q += obj.qd * dt

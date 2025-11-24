@@ -1,22 +1,17 @@
-import logging
-from typing import List, Optional, Protocol, Any
 
 import numpy as np
-from numpy.typing import NDArray
+
 import matplotlib.pyplot as plt
-from matplotlib.patches import Circle
+from matplotlib.patches import Circle, Rectangle
 from matplotlib.collections import LineCollection
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 class Renderer:
-
+    
     def __init__(
         self,
-        x_limits: tuple[float, float] = (-20.0, 20.0),
-        y_limits: tuple[float, float] = (-5.0, 5.0),
-        max_colors: int = 20
+        x_limits = (-10.0, 10.0),
+        y_limits = (-10.0, 10.0),
+        max_colors = 20
     ) -> None:
         self.fig = plt.figure()
         self.ax = self.fig.add_subplot(111, aspect='equal')
@@ -29,47 +24,67 @@ class Renderer:
         self.links_lines = None
         self.joints_circles = None
         self.colors = plt.cm.rainbow(np.linspace(0, 1, max_colors))
-
-        logger.debug("Renderer x=%s, y=%s", x_limits, y_limits)
+        
+        self.base_patch = None
 
     def update(self, objects, dt=0.0001):
 
             if not objects:
-                logger.debug("No objects to render")
                 return
 
             all_links = []
             all_points = []
-            
+
+            def draw_tree(parents, q):
+                nodes = [(0.0, 0.0)]
+                edges = []
+                angles = [0.0] * len(parents)
+                
+                for i in range(0, len(parents)):
+                    parent = parents[i]
+
+                    x_p, y_p = nodes[parent]
+                    angles[i] = angles[parent] + q[i]
+
+                    length = 1.0
+                    
+                    x_child = x_p + length * np.cos(angles[i])
+                    y_child = y_p + length * np.sin(angles[i])
+                    
+                    nodes.append((x_child, y_child))
+                    edges.append((x_p, y_p, x_child, y_child))
+                
+                return nodes, edges
+
             for obj in objects:
-                obj.positions = obj.forward_kinematics(obj.q)
-
-                xs = obj.positions[:, 0]
-                ys = obj.positions[:, 1]
                 
-                links = np.column_stack([xs[:-1], ys[:-1], xs[1:], ys[1:]]).reshape(-1, 2, 2)
-                all_links.append(links)
-                
-                all_points.append(np.column_stack([xs[:-1], ys[:-1]]))
-            
-            all_links = np.concatenate(all_links) if all_links else np.empty((0, 2, 2))
-            all_points = np.concatenate(all_points) if all_points else np.empty((0, 2))
-            
-            if self.links_lines is None:
-                self.links_lines = LineCollection(all_links, colors=self.colors, 
-                                        linewidths=2, capstyle='round')
-                self.ax.add_collection(self.links_lines)
+                nodes, edges = draw_tree(obj.model['parent'], obj.q)
 
-                self.joints_circles = self.ax.scatter(all_points[:, 0], all_points[:, 1], 
-                                                c=self.colors[:len(all_points)], 
-                                                s=25, zorder=10)
-            else:
-                self.links_lines.set_segments(all_links)
-                self.joints_circles.set_offsets(all_points)
+                links = []
+                for i in range(1, len(obj.q)):
+                    parent = obj.model['parent'][i]
+                    x_p, y_p = nodes[parent]
+                    x_c, y_c = nodes[i]
+                    links.append([[x_p, y_p], [x_c, y_c]])
+
+                links = np.array(links)
+                points = np.array(nodes)
+                
+                if self.links_lines is None:
+                    self.links_lines = LineCollection(links, colors=self.colors, linewidths=2)
+                    self.ax.add_collection(self.links_lines)
+                    
+                    self.joints_circles = self.ax.scatter(
+                        points[:, 0], points[:, 1], 
+                        c='lightblue', s=20, zorder=10
+                    )
+                else:
+                    self.links_lines.set_segments(links)
+                    self.joints_circles.set_offsets(points)
 
             self.fig.canvas.draw_idle()
             self.fig.canvas.flush_events()
 
-    def close(self) -> None:
+    def close(self):
         plt.close(self.fig)
         logger.debug("Render window closed")
