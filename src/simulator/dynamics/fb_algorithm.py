@@ -6,4 +6,4 @@ class FBAlgorithm:
         pass
     
     def forward_dynamics(self):
-        return 13;
+        return 7;
