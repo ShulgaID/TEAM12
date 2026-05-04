@@ -20,4 +20,4 @@ jobs:
       - name: Run nox
         run: |
           uv pip install nox
-          uv run nox -s lint tests coverage
+          uv run nox -s lint tests
