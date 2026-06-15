@@ -1,0 +1,34 @@
+<?xml version="1.0" ?>
+<mujoco model="stairs_environment">
+    <compiler angle="radian"/>
+    
+    <asset>
+        <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0"/>
+        <material name="stair" rgba="0.8 0.7 0.6 1"/>
+        <material name="wall" rgba="0.5 0.5 0.5 1"/>
+    </asset>
+    
+    <worldbody>
+        <!-- Stairs environment: 6 steps, each 0.3m high and 0.4m deep -->
+        <!-- Step 1 -->
+        <geom name="stair_1" type="box" pos="0.4 0 0.15" size="0.4 0.15 0.15" material="stair"/>
+        
+        <!-- Step 2 -->
+        <geom name="stair_2" type="box" pos="0.8 0 0.45" size="0.4 0.15 0.15" material="stair"/>
+        
+        <!-- Step 3 -->
+        <geom name="stair_3" type="box" pos="1.2 0 0.75" size="0.4 0.15 0.15" material="stair"/>
+        
+        <!-- Step 4 -->
+        <geom name="stair_4" type="box" pos="1.6 0 1.05" size="0.4 0.15 0.15" material="stair"/>
+        
+        <!-- Step 5 -->
+        <geom name="stair_5" type="box" pos="2.0 0 1.35" size="0.4 0.15 0.15" material="stair"/>
+        
+        <!-- Step 6 -->
+        <geom name="stair_6" type="box" pos="2.4 0 1.65" size="0.4 0.15 0.15" material="stair"/>
+        
+        <!-- Platform at top -->
+        <geom name="platform_top" type="box" pos="2.8 0 1.95" size="0.8 0.15 0.15" material="stair"/>
+    </worldbody>
+</mujoco>
