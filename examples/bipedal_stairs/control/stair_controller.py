@@ -2,6 +2,7 @@ from enum import Enum
 from dataclasses import dataclass
 import numpy as np
 
+
 #Gait states for the finite state machine
 class GaitState(Enum):
     IDLE = "idle"
@@ -24,10 +25,12 @@ class ControllerState:
     actual_angles: np.ndarray  # Current joint angles
     contact_flags: np.ndarray  # Contact state [left_foot, right_foot]
 
+
 #Finite state machine-based controller for stair climbing
 class StairControllerFSM:
 
-    #Initialize FSM controller. Args: step_height: Height of each stair step (meters); step_depth: Depth of each stair step (meters)
+    #Initialize FSM controller.
+    #Args: step_height: Height of each stair step (meters); step_depth: Depth of each stair step (meters)
     def __init__(self, step_height: float = 0.3, step_depth: float = 0.4):
         self.step_height = step_height
         self.step_depth = step_depth
@@ -48,9 +51,16 @@ class StairControllerFSM:
         self.right_stance_duration = 0.3
         self.right_swing_duration = 0.2
 
-        # Control gains
-        self.kp = 50.0  # Proportional gain
-        self.kd = 5.0   # Derivative gain
+        # Control gains (full PID)
+        self.kp = 50.0   # Proportional gain
+        self.ki = 2.0    # Integral gain
+        self.kd = 5.0    # Derivative gain
+        self.integral_limit = 10.0  # Anti-windup clamp
+
+        # PID state
+        self._prev_error: np.ndarray = np.zeros(6)
+        self._integral: np.ndarray = np.zeros(6)
+        self._prev_time: float = 0.0
 
         # State history for debugging
         self.state_history = []
@@ -67,7 +77,7 @@ class StairControllerFSM:
             contact_flags=np.array([True, True])
         )
 
-    #Execute one control loop step
+    #Execute one control loop step.
     #Args: current_time: Current simulation time (seconds); observation: Current state observation from simulator
     #Returns: Control commands for 6 actuators
     def update(self, current_time: float, observation: dict) -> np.ndarray:
@@ -80,8 +90,10 @@ class StairControllerFSM:
         # Generate target trajectory based on current state
         self._compute_target_trajectory()
 
-        # Compute control output
-        control_output = self._compute_control_output()
+        # Compute control output (PID needs dt)
+        dt = current_time - self._prev_time if current_time > self._prev_time else 1e-3
+        self._prev_time = current_time
+        control_output = self._compute_control_output(dt)
 
         # Record state for debugging
         self._record_state_history()
@@ -106,7 +118,6 @@ class StairControllerFSM:
         time_in_state = current_time - self.state_start_time
         self.controller_state.time_in_state = time_in_state
 
-        # Calculate phase within current state (0.0 to 1.0)
         if self.current_state == GaitState.IDLE:
             self._handle_idle_state()
 
@@ -140,17 +151,15 @@ class StairControllerFSM:
                 self.controller_state.step_count += 1
 
         elif self.current_state == GaitState.ERROR:
-            # Error state - try to recover
-            pass
+            pass  # Error state — try to recover
 
         self.controller_state.current_state = self.current_state
 
     #Handle initial idle state
     def _handle_idle_state(self) -> None:
-        # Start with left leg stance
         self._transition_to(GaitState.LEFT_STANCE, 0.0)
 
-    #Perform state transition
+    #Perform state transition.
     #Args: new_state: Target state; time: Current time for state start marker
     def _transition_to(self, new_state: GaitState, time: float) -> None:
         self.previous_state = self.current_state
@@ -183,47 +192,51 @@ class StairControllerFSM:
 
         self.controller_state.target_angles = np.concatenate([left_angles, right_angles])
 
-    #Generate target angles during stance phase
+    #Generate target angles during stance phase.
     #Args: progress: Progress through stance phase [0, 1]
     #Returns: Target angles [hip, knee, ankle]
     def _stance_trajectory(self, progress: float) -> np.ndarray:
         hip_angle = 0.3 * np.sin(progress * np.pi)
         knee_angle = 0.2 * np.cos(progress * np.pi)
         ankle_angle = 0.1 * np.sin(progress * np.pi)
-
         return np.array([hip_angle, knee_angle, ankle_angle])
 
-    #Generate target angles during swing phase
+    #Generate target angles during swing phase.
     #Args: progress: Progress through swing phase [0, 1]
     #Returns: Target angles [hip, knee, ankle]
     def _swing_trajectory(self, progress: float) -> np.ndarray:
         hip_angle = 0.8 * progress - 0.4
         knee_angle = 1.2 * np.sin(progress * np.pi)
         ankle_angle = -0.2 * np.cos(progress * np.pi)
-
         return np.array([hip_angle, knee_angle, ankle_angle])
 
     #Generate target angles preparing for swing.
     #Args: progress: Progress [0, 1]
     #Returns: Target angles [hip, knee, ankle]
     def _prepare_swing_trajectory(self, progress: float) -> np.ndarray:
-        # Slight motion during preparation phase
         hip_angle = 0.1 * np.cos(progress * np.pi)
         knee_angle = 0.05 * np.sin(progress * np.pi)
         ankle_angle = 0.05 * np.cos(progress * np.pi)
-
         return np.array([hip_angle, knee_angle, ankle_angle])
 
-    #Compute motor control outputs using PD control
+    #Compute motor control outputs using full PID control.
+    #Args: dt: Time step in seconds
     #Returns: Control commands for 6 actuators
-    def _compute_control_output(self) -> np.ndarray:
+    def _compute_control_output(self, dt: float) -> np.ndarray:
         error = self.controller_state.target_angles - self.controller_state.actual_angles
-        control = self.kp * error
+
+        # Integral with anti-windup clamp
+        self._integral += error * dt
+        self._integral = np.clip(self._integral, -self.integral_limit, self.integral_limit)
+
+        # Derivative (backwards difference)
+        derivative = (error - self._prev_error) / dt
+        self._prev_error = error.copy()
+
+        control = self.kp * error + self.ki * self._integral + self.kd * derivative
 
         # Clip to motor limits
-        control_clipped = np.clip(control, -20, 20)
-
-        return control_clipped
+        return np.clip(control, -20, 20)
 
     #Record current state for debugging
     def _record_state_history(self) -> None:
@@ -242,12 +255,12 @@ class StairControllerFSM:
         if len(self.state_history) > self.max_history_size:
             self.state_history.pop(0)
 
-    #Get current controller state
+    #Get current controller state.
     #Returns: Current ControllerState object
     def get_state(self) -> ControllerState:
         return self.controller_state
 
-    #Get current state name
+    #Get current state name.
     #Returns: State name as string
     def get_state_name(self) -> str:
         return self.current_state.value
@@ -259,3 +272,8 @@ class StairControllerFSM:
         self.state_start_time = 0.0
         self.controller_state.step_count = 0
         self.state_history.clear()
+
+        # Reset PID state
+        self._prev_error = np.zeros(6)
+        self._integral = np.zeros(6)
+        self._prev_time = 0.0
