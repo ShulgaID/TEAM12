@@ -1,6 +1,7 @@
 import os
 from typing import Any
 import mujoco
+import mujoco.viewer
 import numpy as np
 from examples.bipedal_stairs.communication.layer import CommunicationLayer
 
@@ -18,7 +19,7 @@ class BipedalStairsEnv:
         robot_path = os.path.join(model_dir, "bipedal_robot.xml")
 
         # Load robot model
-        self.model = mujoco.MjModel.from_xml_file(robot_path)
+        self.model = mujoco.MjModel.from_xml_path(robot_path)
         self.data = mujoco.MjData(self.model)
 
         # Setup stairs in the scene
@@ -27,7 +28,7 @@ class BipedalStairsEnv:
         # Renderer
         self.viewer = None
         if self.render:
-            self.viewer = mujoco.Viewer(self.model, self.data)
+            self.viewer = mujoco.viewer.launch_passive(self.model, self.data)
 
         # Simulation parameters
         self.timestep = self.model.opt.timestep
@@ -47,14 +48,24 @@ class BipedalStairsEnv:
     def reset(self) -> None:
         mujoco.mj_resetData(self.model, self.data)
 
-        # Set initial robot position
-        torso_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "torso")
-        self.data.xpos[torso_id] = np.array([0.0, 0.0, 1.0])
+        # Neutral pose: straight legs, feet under CoM, slide_z puts feet at z=0
+        self.data.qpos[0] = 0.0   # slide_x
+        self.data.qpos[1] = 0.09  # slide_z: feet land at z=0 with straight legs
+        self.data.qpos[2] = 0.0   # hinge_y
+        self.data.qpos[3] = 0.0   # left_hip_pitch  (neutral)
+        self.data.qpos[4] = 0.0   # left_knee_pitch
+        self.data.qpos[5] = 0.0   # left_ankle_pitch
+        self.data.qpos[6] = 0.0   # right_hip_pitch
+        self.data.qpos[7] = 0.0   # right_knee_pitch
+        self.data.qpos[8] = 0.0   # right_ankle_pitch
+
+        self.data.ctrl[:] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
         mujoco.mj_forward(self.model, self.data)
 
         self.current_time = 0.0
         self.last_control = np.zeros(6)
+        self.data.ctrl[:] = np.zeros(6)
 
         # Send reset signal through communication layer
         self.communication_layer.send_reset(self.current_time)
@@ -126,7 +137,7 @@ class BipedalStairsEnv:
 
         # Extract joint angles for the 6 controlled joints
         if len(obs["qpos"]) >= 8:
-            obs["joint_angles"] = obs["qpos"][2:8].copy()
+            obs["joint_angles"] = obs["qpos"][3:9].copy()
         else:
             obs["joint_angles"] = np.zeros(6)
 

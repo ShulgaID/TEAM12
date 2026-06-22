@@ -45,20 +45,26 @@ def test_pid_output_clipped():
 
 
 def test_pid_integral_accumulates():
+    """_compute_control_output can accumulate integral when called directly."""
     ctrl = StairControllerFSM()
     ctrl.reset()
     obs = _obs([0.5] * 6)
     ctrl.update(0.00, obs)
     ctrl.update(0.01, obs)
+    # FSM uses position actuators; call _compute_control_output explicitly
+    ctrl._compute_control_output(0.01)
     assert not np.all(ctrl._integral == 0), "Integral should accumulate"
 
 
 def test_pid_derivative_active():
+    """prev_error is updated when _compute_control_output is called directly."""
     ctrl = StairControllerFSM()
     ctrl.reset()
     obs = _obs([0.3] * 6)
     ctrl.update(0.00, obs)
     ctrl.update(0.01, obs)
+    # FSM uses position actuators; _prev_error is set by _compute_control_output
+    ctrl._compute_control_output(0.01)
     assert not np.all(ctrl._prev_error == 0), "prev_error should be set"
 
 

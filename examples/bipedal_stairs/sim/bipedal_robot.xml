@@ -2,123 +2,93 @@
 <mujoco model="bipedal_robot">
     <compiler angle="radian" coordinate="local" inertiafromgeom="true"/>
     <option integrator="RK4" timestep="0.002"/>
-    
     <default>
         <joint type="hinge" damping="0.01" frictionloss="0.0"/>
-        <geom contype="1" conaffinity="1" friction="0.8 0.1 0.1"/>
+        <geom contype="1" conaffinity="1" friction="0.8 0.1 0.1" density="0"/>
     </default>
-    
+    <visual>
+        <global offwidth="1280" offheight="720"/>
+    </visual>
     <asset>
-        <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0"/>
+        <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="512"/>
         <texture name="grid" type="2d" builtin="checker" rgb1="0.1 0.1 0.1" rgb2="0.9 0.9 0.9" width="300" height="300"/>
         <material name="grid" texture="grid" texrepeat="1 1" specular="0.0"/>
     </asset>
-    
     <worldbody>
-        <!-- Ground reference -->
-        <geom name="floor" type="plane" size="10 10 0.1" material="grid"/>
-        
-        <!-- Torso (fixed in Y, Z rotations) -->
-        <body name="torso" pos="0 0 1.0">
-            <inertial mass="10" pos="0 0 0" diaginv="0.1 0.1 0.1"/>
-            <geom name="torso_geom" type="capsule" fromto="0 0 -0.2 0 0 0.2" radius="0.15"/>
-            
-            <!-- Hip joint Y (roll) - FIXED -->
-            <joint name="torso_roll" type="hinge" axis="0 1 0" range="-0.2 0.2" stiffness="0" damping="0.01" limited="true"/>
-            
-            <!-- Hip joint Z (yaw) - FIXED -->
-            <joint name="torso_yaw" type="hinge" axis="0 0 1" range="-0.1 0.1" stiffness="0" damping="0.01" limited="true"/>
-            
-            <!-- Left leg -->
+        <geom name="floor" type="plane" size="10 10 0.1" material="grid" density="0"/>
+        <!-- 5 steps: tread=0.42m, riser=0.13m — taller and narrower than v1 (was 0.55m/0.10m) -->
+        <geom name="step1" type="box" pos="-1.010 0 0.065" size="0.210 1.0 0.065" rgba="0.6 0.5 0.4 1" friction="1.4 0.1 0.1" density="0"/>
+        <geom name="step2" type="box" pos="-1.430 0 0.130" size="0.210 1.0 0.130" rgba="0.6 0.5 0.4 1" friction="1.4 0.1 0.1" density="0"/>
+        <geom name="step3" type="box" pos="-1.850 0 0.195" size="0.210 1.0 0.195" rgba="0.6 0.5 0.4 1" friction="1.4 0.1 0.1" density="0"/>
+        <geom name="step4" type="box" pos="-2.270 0 0.260" size="0.210 1.0 0.260" rgba="0.6 0.5 0.4 1" friction="1.4 0.1 0.1" density="0"/>
+        <geom name="step5" type="box" pos="-2.690 0 0.325" size="0.210 1.0 0.325" rgba="0.6 0.5 0.4 1" friction="1.4 0.1 0.1" density="0"/>
+        <!-- Landing starts at x=-2.90, top at z=0.65 -->
+        <geom name="landing" type="box" pos="-6.400 0 0.325" size="3.500 1.0 0.325" rgba="0.5 0.6 0.4 1" friction="1.4 0.1 0.1" density="0"/>
+        <body name="torso" pos="0 0 1.3">
+            <joint name="slide_x" type="slide" axis="1 0 0"/>
+            <joint name="slide_z" type="slide" axis="0 0 1"/>
+            <joint name="hinge_y" type="hinge" axis="0 1 0" range="-0.5 0.5" damping="160.0" stiffness="9000.0"/>
+            <inertial mass="10" pos="0 0 0" diaginertia="10 10 10"/>
+            <geom name="torso_geom" type="capsule" fromto="0 0 -0.2 0 0 0.2" size="0.15" density="0"/>
             <body name="left_hip" pos="0 0.1 0">
-                <inertial mass="2" pos="0 0 -0.3" diaginv="0.01 0.01 0.01"/>
-                <geom name="left_hip_geom" type="capsule" fromto="0 0 0 0 0 -0.6" radius="0.08"/>
-                
-                <!-- Left hip pitch (X) - CONTROLLED -->
-                <joint name="left_hip_pitch" type="hinge" axis="1 0 0" range="-1.57 1.57" damping="0.05"/>
-                
-                <!-- Left knee -->
+                <inertial mass="2" pos="0 0 -0.3" diaginertia="0.06 0.06 0.06"/>
+                <geom name="left_hip_geom" type="capsule" fromto="0 0 0 0 0 -0.6" size="0.08" density="0"/>
+                <joint name="left_hip_pitch" type="hinge" axis="0 1 0" range="-1.57 1.57" damping="1.0"/>
                 <body name="left_knee" pos="0 0 -0.6">
-                    <inertial mass="1.5" pos="0 0 -0.3" diaginv="0.01 0.01 0.01"/>
-                    <geom name="left_knee_geom" type="capsule" fromto="0 0 0 0 0 -0.6" radius="0.07"/>
-                    
-                    <!-- Left knee pitch (X) - CONTROLLED -->
-                    <joint name="left_knee_pitch" type="hinge" axis="1 0 0" range="-1.57 1.57" damping="0.05"/>
-                    
-                    <!-- Left ankle -->
+                    <inertial mass="1.5" pos="0 0 -0.3" diaginertia="0.04 0.04 0.04"/>
+                    <geom name="left_knee_geom" type="capsule" fromto="0 0 0 0 0 -0.6" size="0.07" density="0"/>
+                    <joint name="left_knee_pitch" type="hinge" axis="0 1 0" range="-1.57 1.57" damping="1.0"/>
                     <body name="left_ankle" pos="0 0 -0.6">
-                        <inertial mass="1" pos="0 0 -0.1" diaginv="0.01 0.01 0.01"/>
-                        <geom name="left_ankle_geom" type="capsule" fromto="0 0 0 0 0 -0.15" radius="0.06"/>
-                        <geom name="left_foot" type="box" pos="0 0 -0.15" size="0.08 0.06 0.04"/>
-                        
-                        <!-- Left ankle pitch (X) - CONTROLLED -->
-                        <joint name="left_ankle_pitch" type="hinge" axis="1 0 0" range="-0.785 0.785" damping="0.05"/>
+                        <inertial mass="1" pos="0 0 -0.075" diaginertia="0.01 0.01 0.01"/>
+                        <geom name="left_ankle_geom" type="capsule" fromto="0 0 0 0 0 -0.07" size="0.055" density="0"/>
+                        <geom name="left_heel" type="box" pos=" 0.06 0 -0.15" size="0.07 0.06 0.04" density="0"/>
+                        <geom name="left_toe"  type="box" pos="-0.05 0 -0.15" size="0.05 0.06 0.04" density="0"/>
+                        <joint name="left_ankle_pitch" type="hinge" axis="0 1 0" range="-0.785 0.785" damping="0.5"/>
                     </body>
                 </body>
             </body>
-            
-            <!-- Right leg -->
             <body name="right_hip" pos="0 -0.1 0">
-                <inertial mass="2" pos="0 0 -0.3" diaginv="0.01 0.01 0.01"/>
-                <geom name="right_hip_geom" type="capsule" fromto="0 0 0 0 0 -0.6" radius="0.08"/>
-                
-                <!-- Right hip pitch (X) - CONTROLLED -->
-                <joint name="right_hip_pitch" type="hinge" axis="1 0 0" range="-1.57 1.57" damping="0.05"/>
-                
-                <!-- Right knee -->
+                <inertial mass="2" pos="0 0 -0.3" diaginertia="0.06 0.06 0.06"/>
+                <geom name="right_hip_geom" type="capsule" fromto="0 0 0 0 0 -0.6" size="0.08" density="0"/>
+                <joint name="right_hip_pitch" type="hinge" axis="0 1 0" range="-1.57 1.57" damping="1.0"/>
                 <body name="right_knee" pos="0 0 -0.6">
-                    <inertial mass="1.5" pos="0 0 -0.3" diaginv="0.01 0.01 0.01"/>
-                    <geom name="right_knee_geom" type="capsule" fromto="0 0 0 0 0 -0.6" radius="0.07"/>
-                    
-                    <!-- Right knee pitch (X) - CONTROLLED -->
-                    <joint name="right_knee_pitch" type="hinge" axis="1 0 0" range="-1.57 1.57" damping="0.05"/>
-                    
-                    <!-- Right ankle -->
+                    <inertial mass="1.5" pos="0 0 -0.3" diaginertia="0.04 0.04 0.04"/>
+                    <geom name="right_knee_geom" type="capsule" fromto="0 0 0 0 0 -0.6" size="0.07" density="0"/>
+                    <joint name="right_knee_pitch" type="hinge" axis="0 1 0" range="-1.57 1.57" damping="1.0"/>
                     <body name="right_ankle" pos="0 0 -0.6">
-                        <inertial mass="1" pos="0 0 -0.1" diaginv="0.01 0.01 0.01"/>
-                        <geom name="right_ankle_geom" type="capsule" fromto="0 0 0 0 0 -0.15" radius="0.06"/>
-                        <geom name="right_foot" type="box" pos="0 0 -0.15" size="0.08 0.06 0.04"/>
-                        
-                        <!-- Right ankle pitch (X) - CONTROLLED -->
-                        <joint name="right_ankle_pitch" type="hinge" axis="1 0 0" range="-0.785 0.785" damping="0.05"/>
+                        <inertial mass="1" pos="0 0 -0.075" diaginertia="0.01 0.01 0.01"/>
+                        <geom name="right_ankle_geom" type="capsule" fromto="0 0 0 0 0 -0.07" size="0.055" density="0"/>
+                        <geom name="right_heel" type="box" pos=" 0.06 0 -0.15" size="0.07 0.06 0.04" density="0"/>
+                        <geom name="right_toe"  type="box" pos="-0.05 0 -0.15" size="0.05 0.06 0.04" density="0"/>
+                        <joint name="right_ankle_pitch" type="hinge" axis="0 1 0" range="-0.785 0.785" damping="0.5"/>
                     </body>
                 </body>
             </body>
         </body>
     </worldbody>
-    
     <actuator>
-        <!-- Left leg actuators -->
-        <motor name="left_hip_motor" joint="left_hip_pitch" ctrlrange="-20 20" ctrllimited="true"/>
-        <motor name="left_knee_motor" joint="left_knee_pitch" ctrlrange="-15 15" ctrllimited="true"/>
-        <motor name="left_ankle_motor" joint="left_ankle_pitch" ctrlrange="-10 10" ctrllimited="true"/>
-        
-        <!-- Right leg actuators -->
-        <motor name="right_hip_motor" joint="right_hip_pitch" ctrlrange="-20 20" ctrllimited="true"/>
-        <motor name="right_knee_motor" joint="right_knee_pitch" ctrlrange="-15 15" ctrllimited="true"/>
-        <motor name="right_ankle_motor" joint="right_ankle_pitch" ctrlrange="-10 10" ctrllimited="true"/>
+        <position name="left_hip_motor"    joint="left_hip_pitch"    kp="500" kv="20" ctrlrange="-1.57 1.57"/>
+        <position name="left_knee_motor"   joint="left_knee_pitch"   kp="400" kv="20" ctrlrange="-1.57 0.0"/>
+        <position name="left_ankle_motor"  joint="left_ankle_pitch"  kp="120" kv="10" ctrlrange="-0.785 0.785"/>
+        <position name="right_hip_motor"   joint="right_hip_pitch"   kp="500" kv="20" ctrlrange="-1.57 1.57"/>
+        <position name="right_knee_motor"  joint="right_knee_pitch"  kp="400" kv="20" ctrlrange="-1.57 0.0"/>
+        <position name="right_ankle_motor" joint="right_ankle_pitch" kp="120" kv="10" ctrlrange="-0.785 0.785"/>
     </actuator>
-    
     <sensor>
-        <!-- Joint angle sensors -->
-        <jointpos name="left_hip_pos" joint="left_hip_pitch"/>
-        <jointpos name="left_knee_pos" joint="left_knee_pitch"/>
-        <jointpos name="left_ankle_pos" joint="left_ankle_pitch"/>
-        <jointpos name="right_hip_pos" joint="right_hip_pitch"/>
-        <jointpos name="right_knee_pos" joint="right_knee_pitch"/>
+        <jointpos name="left_hip_pos"    joint="left_hip_pitch"/>
+        <jointpos name="left_knee_pos"   joint="left_knee_pitch"/>
+        <jointpos name="left_ankle_pos"  joint="left_ankle_pitch"/>
+        <jointpos name="right_hip_pos"   joint="right_hip_pitch"/>
+        <jointpos name="right_knee_pos"  joint="right_knee_pitch"/>
         <jointpos name="right_ankle_pos" joint="right_ankle_pitch"/>
-        
-        <!-- Joint velocity sensors -->
-        <jointvel name="left_hip_vel" joint="left_hip_pitch"/>
-        <jointvel name="left_knee_vel" joint="left_knee_pitch"/>
-        <jointvel name="left_ankle_vel" joint="left_ankle_pitch"/>
-        <jointvel name="right_hip_vel" joint="right_hip_pitch"/>
-        <jointvel name="right_knee_vel" joint="right_knee_pitch"/>
+        <jointvel name="left_hip_vel"    joint="left_hip_pitch"/>
+        <jointvel name="left_knee_vel"   joint="left_knee_pitch"/>
+        <jointvel name="left_ankle_vel"  joint="left_ankle_pitch"/>
+        <jointvel name="right_hip_vel"   joint="right_hip_pitch"/>
+        <jointvel name="right_knee_vel"  joint="right_knee_pitch"/>
         <jointvel name="right_ankle_vel" joint="right_ankle_pitch"/>
-        
-        <!-- Position sensors -->
-        <framepos name="torso_pos" objtype="body" objname="torso"/>
-        <framepos name="left_foot_pos" objtype="body" objname="left_ankle"/>
+        <framepos name="torso_pos"      objtype="body" objname="torso"/>
+        <framepos name="left_foot_pos"  objtype="body" objname="left_ankle"/>
         <framepos name="right_foot_pos" objtype="body" objname="right_ankle"/>
     </sensor>
 </mujoco>
